@@ -14,9 +14,10 @@ aggr_switches = []
 edge_switches = []
 hosts = []
 
-class FatTreeTopo(Topo):
+class SimpleTopo(Topo):
     def __init__(self, k):
-        super(FatTreeTopo, self).__init__()
+        super(SimpleTopo
+    , self).__init__()
         self.k = k
         self.create_fat_tree()
 
@@ -107,7 +108,7 @@ def generate_and_visualize_topology(topo, filename='topology', output_format='pn
 
 def run_fat_tree(k):
     show_graph = 0
-    topo = FatTreeTopo(k)
+    topo = SimpleTopo(k)
     net = Mininet(topo, link=TCLink, controller=None, autoSetMacs=True, autoStaticArp=True)
     net.addController('controller', controller=RemoteController, ip="127.0.0.1", port=6633, protocols="OpenFlow13")
     net.start()
