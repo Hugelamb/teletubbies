@@ -8,17 +8,17 @@ import threading
 import sys
 import cmd
 
-def ddos_attack(target,attacker):
+def ddos_attack(target,attacker,sim_length=10):
     # Send a ddos attack targeting host 'target' from host 'attacker'
-    # send for a defined period of time or until packets are blocked by firewall/
-    
-    
+    # send for a defined period of time or until packets are blocked by firewall/ 
+    host.cmd('sh timeout' + str(sim_length) + 's hping3 ' + target_ip + ' --flood -a ' + attacker_ip)
     
     return "Process <ddos_attack> terminated."
 def ddos_good_actor():
     """
     generate normal packet activity for given host in network.
     """
+    host.cmd(host + ' ping ' + INSERT RANDOMIZED destination)
     return "Process <ddos_good_actor> terminated."
 def run_attack_sim():
     
@@ -27,7 +27,7 @@ def run_attack_sim():
     
     atk_thread.start()
     tgt_thread.start()
-    
+
     atk_thread.join()
     tgt_thread.join()
     return "Simulation Started"
