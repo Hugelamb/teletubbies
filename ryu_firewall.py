@@ -9,6 +9,7 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import ether_types
 from ryu.lib import dpid as dpid_lib
+from ryu.lib import hub # check
 import ipaddress
 
 class SimpleSwitch13(app_manager.RyuApp):
@@ -19,6 +20,16 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.mac_to_port = {}
         self.datapaths = {}
         self.k = 4
+
+        # adds
+        self.src_mac = []       # list of src
+        self.dst_mac = []       # list of dst
+        self.count_dst = []     # count of access
+        self.count_src = []
+        self.datapaths = {}
+        self.monitor_thread = hub.spawn(self.monitor)
+        self.linklimit = 5 # threshold for link
+        self.dstlimit = 2 # threshold for dest
 
 
     def check_ip_in_subnet(ip, subnet):
@@ -247,3 +258,81 @@ class SimpleSwitch13(app_manager.RyuApp):
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
+
+    # firewall detection function
+    # todo: (hugh) create a function that continuously checks and 
+    # sends 'DROP' rules accordingly
+
+    '''
+    notes:
+        can potentially think about simplifying the controller (just using the basic)
+        simple switch version. this stands for the network topology as well so
+        it is simpler to simulate.
+
+    firewall:
+        - add variables:
+            - self.src_mac: store source MAC addr
+            - self.dst_mac: store dest MAC addr
+            - self.count_src: count num packets sent to each source
+            - self.count_dst: count num packets sent to each dest
+            - self.datapaths: keep track of registered dp (switches)
+            - self.monitor_thread: spawns a monitoring thread to periodically request flow statistics
+            - self.linkLimit: set thresholds for taking action based on link stats
+            - self.dstLimitL set thresholds for taking action based on dst behaviour
+
+    '''
+
+    def monitor(self):
+        '''
+        design a monitor on timing system to request switch infomations about flow
+        '''
+        while True:    #initiatie to request port and flow info all the time
+            for dp in self.datapaths.values():
+                self.send_flow_stats_request(dp)
+            hub.sleep(10)    #pause to sleep to wait reply, and gave time to other gevent to request
+
+    def send_flow_stats_request(self, dp):
+        parser = dp.ofproto_parser
+        req = parser.OFPFlowStatsRequest(dp)
+        dp.send_msg(req)
+    
+    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
+    def flow_stats_reply_handler(self, ev):
+        datapath = ev.msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        for stat in ev.msg.body:
+            if stat.priority == 1:
+                if stat.packet_count > 0:
+                    if len(self.dst_mac) > 0:
+                        for i in range(len(self.dst_mac)):
+                            if stat.match['eth_dst'] == self.dst_mac[i]:
+                                self.count_dst[i] += 1
+                    if (stat.packet_count >= self.linklimit and stat.byte_count/stat.packet_count < 100):
+                        self.add_flow(datapath=datapath, priority=10, match=stat.match, actions=[], idle_timeout=10)
+                        print('drop link:')
+                        print(stat.match['eth_src'],stat.match['eth_dst'])
+                    mod = parser.OFPFlowMod(datapath=datapath, priority=stat.priority, 
+                                            idle_timeout=stat.idle_timeout, match=stat.match, 
+                                            instructions=stat.instructions, flags=ofproto.OFPFF_RESET_COUNTS) # reset counts
+                    datapath.send_msg(mod)
+        if len(self.dst_mac) > 0:
+            for i in range(len(self.count_dst)):
+                if self.count_dst[i] >= self.dstlimit:
+                    match = parser.OFPMatch(eth_dst=self.dst_mac[i])
+                    self.add_flow(datapath=datapath, priority=11, match=match, actions=[], idle_timeout=10)
+                    print('drop dst_mac:')
+                    print(self.dst_mac[i])
+            self.count_dst = [i * 0 for i in self.count_dst]        # reset
+    
+    def count(self, src, dst):      
+        if len(self.dst_mac) == 0:          # dst mac address
+            self.dst_mac.append(dst)
+            self.count_dst.append(0)
+        else:
+            for i in range(len(self.dst_mac)):
+                if dst == self.dst_mac[i]:
+                    break
+                if i == len(self.dst_mac) - 1:
+                    self.dst_mac.append(dst)
+                    self.count_dst.append(0)
