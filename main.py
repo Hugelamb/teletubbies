@@ -16,7 +16,7 @@ def run(k):
     # subprocess.Popen(['ryu-manager', 'visualize.py', '--log-dir', 'logs', '--log-file', 'ryu.log'])
 
     process = subprocess.Popen(
-    ['ryu-manager', 'ryu_firewall.py', 'visualize.py', '--log-dir', 'logs', '--log-file', 'ryu.log'],
+    ['ryu-manager', 'visualize.py', '--log-dir', 'logs', '--log-file', 'ryu.log'],
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
     stdin=subprocess.DEVNULL,
