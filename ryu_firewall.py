@@ -9,6 +9,7 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import ether_types
 from ryu.lib import dpid as dpid_lib
+from ryu.lib import hub
 import ipaddress
 
 class SimpleSwitch13(app_manager.RyuApp):
@@ -19,6 +20,16 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.mac_to_port = {}
         self.datapaths = {}
         self.k = 4
+
+        # firewall variables
+        self.monitor_thread = hub.spawn(self.monitor)
+        self.src_mac = [] # list of source mac addresses to track
+        self.dst_mac = [] # list of destination mac addresses to track
+        self.count_src = [] # number of times each src has sent requests
+        self.count_dst = [] # number of times each dst has received packets
+        self.link_max = 5 # set the max. number of packets a link can receive within a window
+        self.byte_ratio_max = 100 # set min. number of bytes per packet
+        self.dst_max = 2 # set the max. number of times a dst can receive packets within a window
 
 
     def check_ip_in_subnet(ip, subnet):
@@ -168,7 +179,7 @@ class SimpleSwitch13(app_manager.RyuApp):
 
             match = parser.OFPMatch(eth_type = 0x0800, ipv4_dst = ip_DEST)
             actions = [parser.OFPActionOutput(port_DEST)]
-            self.add_flow(datapath, 11, match, actions)
+            # self.add_flow(datapath, 11, match, actions)
             self.add_flow(datapath, 10, match, actions)
             self.logger.info("Added flow to switch %s to port %d for address %s", dpid_str, port_DEST, ip_DEST)
         
@@ -228,6 +239,8 @@ class SimpleSwitch13(app_manager.RyuApp):
         else:
             out_port = ofproto.OFPP_FLOOD
 
+        # increment 
+        self.add_dst(src, dst)
         actions = [parser.OFPActionOutput(out_port)]
 
         # install a flow to avoid packet_in next time
@@ -247,3 +260,105 @@ class SimpleSwitch13(app_manager.RyuApp):
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
+
+    '''
+    monitor()
+        periodically requests flow and port stats from the switch with a period of 1 sec
+    '''
+    def monitor(self):
+        while True:
+            for dp in self.datapaths.values():
+                self.get_stats(dp)
+            hub.sleep(1) # check the throughput every 1 second
+
+    '''
+    get_stats()
+        retrieves the flow and port stats from the switch
+    '''
+    def get_stats(self, datapath):
+        self.logger.info('Requesting stats for: %016x', datapath.id)
+
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        request = parser.OFPFLowStatsRequest(datapath)
+        datapath.send_msg(request)
+
+        # request = parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY) # gets port info for all ports
+        # datapath.send_msg(request)
+
+    '''
+    handle_flow_stats
+        -> called whenever switch fufils flow stats request that is sent periodically (T = 1 sec)
+        retreive relevant data from the flow stats reply
+        check data against firewall conditions
+        add 'DROP' flow rules if firewall triggered with idle timeout of 10 
+
+        firewall conditions:
+        1. packet condition -> number of packets received exceeds the link limit
+        2. byte condition -> ratio of bytes to packets received is low (lots of packets with little data - 'empty' packets)
+        3. dst condition -> number of packets sent to a host (dst) exceeds the dst limit
+
+    '''
+    @set_ev_cls(ofp_event.EVENTOFPFlowStatsReply, MAIN_DISPATCHER)
+    def handle_flow_stats(self, ev):
+        msg = ev.msg
+        datapath = msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        # sort flow rules, then check the stats of each rule
+        for stat in msg.body:
+            # filter out by flow rules that have matched
+            if stat.packet_count > 0:
+                if len(self.dst_mac) > 0:
+                    # check each dst mac in list and update respective counts
+                    for i in range(len(self.dst_mac)):
+                        if stat.match['eth_dst'] == self.dst_mac[i]: self.count_dst[i] += 1
+                
+                # check against firewall conditions
+                packet_condition = stat.packet_count >= self.link_max
+                byte_condition = (stat.byte_count / stat.packet_count) < byte_ratio_max
+
+                if packet_condition and byte_condition:
+                    # if ddos detected, send a flow rule to DROP packets
+                    self.add_flow(datapath=datapath, priority=11, match=stat.match, actions=[], idle_timeout=10)
+                    pkt = packet.Packet(msg.data)
+                    eth = pkt.get_protocols(ethernet.ethernet)[0]
+                    print(f'!!! DDOS detected !!!')
+                    print(f'Dropping link from: {eth.src}, to: {eth.dst}')
+                
+                # send flow mod request to update the flow table
+                mod = parser.OFPFlowMod(datapath=datapath, priority=stat.priority, idle_timeout=stat.idle_timeout, match=stat.match, instructions=stat.instructions, flags=ofproto.OFPFF_RESET_COUNTS) # reset the counts for each flag
+
+                datapath.send_msg(mod)
+        
+        # check dst condition
+        if len(self.dst_mac) > 0:
+            for i in range(len(self.count_dst)):
+                dst_condition = self.count_dst[i] >= self.dst_max
+                if dst_condition:
+                    match = parser.OFPMatch(eth_dst=self.dst_mac[i])
+                    # send DROP rule
+                    self.add_flow(datapath=datapath, priority=12, match=match, actions=[], idle_timeout=10)
+
+                    print(f'Dropping packets to dst mac: {self.dst_mac[i]}')
+            
+            # reset all dst counts to 0
+            self.count_dst = [i * 0 for i in self.count_dst]
+    
+    '''
+    add_dst
+        add an incoming dst mac address to the list of dst mac addresses
+    '''
+    def add_dst(self, src, dst):
+        if len(self.dst_mac) == 0:
+            self.dst_mac.append(dst) # add dest to list of destinations
+            self.count_dst.append(0) # initialise
+        else:
+            for i in range(len(self.dst_mac)):
+                if dst == self.dst_mac[i]:
+                    break # if dst already exists
+                if i == len(self.dst_mac) - 1:
+                    self.dst_mac.append(dst) # add new dst to end of list
+                    self.count_dst.append(0)
