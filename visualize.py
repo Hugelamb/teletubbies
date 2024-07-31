@@ -20,6 +20,7 @@ from ryu.controller import ofp_event
 from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.lib import hub
+import requests
 
 
 class SimpleMonitor13(ryu_firewall.SimpleSwitch13):
@@ -93,3 +94,10 @@ class SimpleMonitor13(ryu_firewall.SimpleSwitch13):
                              ev.msg.datapath.id, stat.port_no,
                              stat.rx_packets, stat.rx_bytes, stat.rx_errors,
                              stat.tx_packets, stat.tx_bytes, stat.tx_errors)
+
+        # url = "http://127.0.0.1:5000/update/table
+        # data = {ev.msg.datapath.id, stat.port_no,
+        #         stat.rx_packets, stat.rx_bytes, stat.rx_errors,
+        #         stat.tx_packets, stat.tx_bytes, stat.tx_errors}
+
+        # response = requests.put(url, json=data)
