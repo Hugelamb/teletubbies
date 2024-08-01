@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Attack Monitoring</title>
+    <!-- Include the Socket.IO library -->
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <h1>Attack Monitoring Dashboard</h1>
+    <!-- Table to display the attack data -->
+    <table id="attackDataTable">
+        <thead>
+            <tr>
+                <th>Attacker Host</th>
+                <th>Target Host</th>
+                <th>Number of Packets</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Data rows will be added here dynamically -->
+        </tbody>
+    </table>
+
+    <script>
+        // Initialize a connection to the server
+        const socket = io();
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('update', (data) => {
+            console.log('Received update:', data);
+            const tableBody = document.getElementById('attackDataTable').querySelector('tbody');
+            tableBody.innerHTML = '';
+            for (const [attackerHost, attackData] of Object.entries(data)) {
+                const row = document.createElement('tr');
+                const attackerHostCell = document.createElement('td');
+                attackerHostCell.textContent = attackerHost;
+
+                const targetHostCell = document.createElement('td');
+                targetHostCell.textContent = attackData.target_host;
+
+                const pktNumCell = document.createElement('td');
+                pktNumCell.textContent = attackData.pkt_num;
+
+                const timeStampCell = document.createElement('td');
+                timeStampCell.textContent = new Date(attackData.time_stamp * 1000).toLocaleString(); // Format timestamp
+
+                row.appendChild(attackerHostCell);
+                row.appendChild(targetHostCell);
+                row.appendChild(pktNumCell);
+                row.appendChild(timeStampCell);
+
+                tableBody.appendChild(row);
+            }
+        });
+    </script>
+</body>
+</html>
