@@ -22,6 +22,14 @@ def run(k):
     stdin=subprocess.DEVNULL,
     start_new_session=True
     )
+    
+    subprocess.Popen(
+    ['ryu-manager', 'ryu_firewall.py', '--log-dir', 'logs', '--log-file', 'ryu.log'],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    stdin=subprocess.DEVNULL,
+    start_new_session=True
+    )
 
     topo = SimpleTopo(k)
 
