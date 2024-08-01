@@ -108,11 +108,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         switch_index = switch_index // 10   # 1st digit
 
         # Agg to Core route - if in from port 3&4, out from ports 1&2
-        for in_port in range(1+self.k//2, 1+self.k):
-            for out_port in range(1, 1+self.k//2):
-                match = parser.OFPMatch(in_port=(in_port))
-                actions = [parser.OFPActionOutput(out_port)]
-                self.add_flow(datapath, 1, match, actions)
         for j in range(0, self.k//2):
             ip_DEST = (f"0.0.0.{j+2}", '0.0.0.255')
             
@@ -143,11 +138,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         switch_index = switch_index // 10   # 1st digit
 
         # Edge to Agg route - if in from port 3&4, out from ports 1&2
-        for in_port in range(1+self.k//2, 1+self.k):
-            for out_port in range(1, 1+self.k//2):
-                match = parser.OFPMatch(in_port=(in_port))
-                actions = [parser.OFPActionOutput(out_port)]
-                self.add_flow(datapath, 1, match, actions)
 
         for j in range(0, self.k//2):
             ip_DEST = (f"0.0.0.{j+2}", '0.0.0.255')
@@ -168,7 +158,6 @@ class SimpleSwitch13(app_manager.RyuApp):
 
             match = parser.OFPMatch(eth_type = 0x0800, ipv4_dst = ip_DEST)
             actions = [parser.OFPActionOutput(port_DEST)]
-            self.add_flow(datapath, 11, match, actions)
             self.add_flow(datapath, 10, match, actions)
             self.logger.info("Added flow to switch %s to port %d for address %s", dpid_str, port_DEST, ip_DEST)
         
