@@ -188,7 +188,7 @@ class SimpleSwitch13(app_manager.RyuApp):
     def get_datapath(self, switch_name):
         return self.datapaths.get(switch_name)
 
-    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None, idle_timeout=0):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -197,10 +197,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, match=match,
-                                    instructions=inst)
+                                    instructions=inst, idle_timeout=idle_timeout)
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    match=match, instructions=inst)
+                                    match=match, instructions=inst, idle_timeout=idle_timeout)
         datapath.send_msg(mod)
    
 
@@ -307,19 +307,19 @@ class SimpleSwitch13(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
+        print('Flow stats received...')
+
         # sort flow rules, then check the stats of each rule
         for stat in msg.body:
-            print(f"{stat}")
             # filter out by flow rules that have matched
             if stat.packet_count > 0:
                 if len(self.dst_mac) > 0:
                     # check each dst mac in list and update respective counts
-                    print(f"{self.dst_mac}")
                     for i in range(len(self.dst_mac)):
                         if 'eth_dst' in stat.match:
-                            print(f"{stat.match}")
-                            print('eth destination is ', stat.match['eth_dst'])
-                            if stat.match['eth_dst'] == self.dst_mac[i]: self.count_dst[i] += 1
+                            if stat.match['eth_dst'] == self.dst_mac[i]:
+                                print('incremented count for: ', stat.match['eth_dst'])
+                                self.count_dst[i] += 1
                 
                 # check against firewall conditions
                 packet_condition = stat.packet_count >= self.link_max
@@ -345,7 +345,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                     match = parser.OFPMatch(eth_dst=self.dst_mac[i])
                     # send DROP rule
                     self.add_flow(datapath=datapath, priority=12, match=match, actions=[], idle_timeout=10)
-
+                    print(f'!!! DDOS detected !!!')
                     print(f'Dropping packets to dst mac: {self.dst_mac[i]}')
             
             # reset all dst counts to 0
