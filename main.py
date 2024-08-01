@@ -8,6 +8,7 @@ from ddos_sim import ddos_attack
 import subprocess
 import argparse
 import sys
+import website
 
 def run(k):
     
@@ -15,13 +16,15 @@ def run(k):
     # subprocess.Popen(['ryu-manager', 'ryu_firewall.py', '--log-dir', 'logs', '--log-file', 'ryu.log'])
     # subprocess.Popen(['ryu-manager', 'visualize.py', '--log-dir', 'logs', '--log-file', 'ryu.log'])
 
-    process = subprocess.Popen(
-    ['ryu-manager', 'visualize.py', '--log-dir', 'logs', '--log-file', 'ryu.log'],
-    stdout=subprocess.DEVNULL,
-    stderr=subprocess.DEVNULL,
-    stdin=subprocess.DEVNULL,
-    start_new_session=True
-    )
+    # process = subprocess.Popen(
+    # ['ryu-manager', 'visualize.py', '--log-dir', 'logs', '--log-file', 'ryu.log'],
+    # stdout=subprocess.DEVNULL,
+    # stderr=subprocess.DEVNULL,
+    # stdin=subprocess.DEVNULL,
+    # start_new_session=True
+    # )
+    
+    website.socketio.run(app, debug=True, port=5000)
     
     subprocess.Popen(
     ['ryu-manager', 'ryu_firewall.py', '--log-dir', 'logs', '--log-file', 'ryu.log'],
