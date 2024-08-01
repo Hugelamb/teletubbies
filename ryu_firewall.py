@@ -273,7 +273,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         while True:
             for dp in self.datapaths.values():
                 self.get_stats(dp)
-            hub.sleep(10) # check the throughput every 1 second
+            hub.sleep(20) # check the throughput every 1 second
 
     '''
     get_stats()
@@ -314,40 +314,36 @@ class SimpleSwitch13(app_manager.RyuApp):
         print('Flow stats received...')
 
         # sort flow rules, then check the stats of each rule
-        for stat in sorted([flow for flow in msg.body if flow.priority ==1 and 'ipv4_dst' in flow.match], key=lambda flow: (flow.match.get('ipv4_dst'))):
+        for stat in sorted([flow for flow in msg.body if (flow.priority == 1 or flow.priority == 10)  and 'ipv4_dst' in flow.match], key=lambda flow: flow.match['ipv4_dst']):
             print(stat.match)
             # filter out by flow rules that have matchedoffending handler [handle_flow_stats] servicing event [EventOFPFlowStatsReply] follows.
             print('priority passed...')
             print(stat)
-            print('destination ips: ')
-            print(self.dst_ip)
             if stat.packet_count == 0:
-                print('dest ips: ', self.dst_ip)
                 ip_dst = stat.match['ipv4_dst']
                 if ip_dst not in self.dst_ip:
                     # self.dst_ip.append(ip_dst)
                     # self.count_dst.append(1)
                     self.dst_ip[ip_dst] = 0
                     print('added ip for: ', ip_dst)
+                # else:
+                #     self.dst_ip[ip_dst] += 0
 
             if stat.packet_count > 0:
                 print('packet count passed...')
                 if len(self.dst_ip) > 0:
                     # check each dst ip in list and update respective counts
-                    for dest_ip in self.dst_ip:
-                        if 'ipv4_dst' in stat.match:
-                            ip_dst = stat.match['ipv4_dst']
-                            if ip_dst not in self.dst_ip:
-                                self.dst_ip[ip_dst] = 0
+                    if 'ipv4_dst' in stat.match:
+                        ip_dst = stat.match['ipv4_dst']
 
-                                # self.dst_ip.append(ip_dst)
-                                # self.count_dst.append(1)
-                                print('added ip for: ', ip_dst)
-                            else:
-                                # ip_pos = self.dst_ip.index(ip_dst)
-                                # self.count_dst[ip_pos] += 1
-                                self.dst_ip[ip_dst] += 1
-                                print('incremented count for: ', ip_dst)
+                        if ip_dst not in self.dst_ip: 
+                            self.dst_ip[ip_dst] = 0
+                            print('added ip for: ', ip_dst)
+                        else:
+                            for dest_ip, dest_count in self.dst_ip:
+                                if ip_dst == dest_ip:
+                                    self.dst_ip[dest_ip] = dest_count + 1
+                                    print('incremented count for: ', ip_dst)
 
                     
                     # check against firewall conditions
@@ -377,10 +373,11 @@ class SimpleSwitch13(app_manager.RyuApp):
                     self.add_flow(datapath=datapath, priority=15, match=match, actions=[], idle_timeout=10)
                     print(f'!!! DDOS detected - dst limit !!!')
                     print(f'Dropping packets to dst mac: {dest_ip}')
+
             
-            # reset all dst counts to 0
-            for key in self.dst_ip:
-                self.dst_ip[key] = 0
+        # reset all dst counts to 0
+        for key in self.dst_ip:
+            self.dst_ip[key] = 0
     
     '''
     add_dst
