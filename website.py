@@ -4,7 +4,8 @@ from flask_socketio import SocketIO
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-data_storage = {}
+attack_data_store = {}
+firewall_data_store = {}
 
 @app.route("/")
 def main():
@@ -14,13 +15,17 @@ def main():
 def attack():
     return render_template('attack.html')
 
+@app.route("/firewall")
+def firewall_page():
+    return render_template('firewall.html')
+
 @app.route('/attack/<item_id>', methods=['PUT'])
-def update_item(item_id):
+def update_attack_item(item_id):
     if request.is_json:
         data = request.get_json()
-        data_storage[item_id] = data
+        attack_data_store[item_id] = data
         
-        socketio.emit('update', data_storage)
+        socketio.emit('update', attack_data_store)
 
         return '', 200
     else:
@@ -30,9 +35,9 @@ def update_item(item_id):
 def update_firewall_item(item_id):
     if request.is_json:
         data = request.get_json()
-        data_storage[item_id] = data
+        firewall_data_store[item_id] = data
         
-        socketio.emit('update', data_storage)
+        socketio.emit('firewall_update', firewall_data_store)
 
         return '', 200
     else:

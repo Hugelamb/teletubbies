@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Attack Monitoring</title>
+    <!-- Include Socket.IO library -->
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        #attackStatusTitle {
+            font-weight: bold;
+            color: red;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <h1>Attack Monitoring Dashboard</h1>
+    <div id="attackStatusTitle">Monitoring System Status...</div>
+    <table id="FirewallDataTable">
+        <thead>
+            <tr>
+                <th>Suspected Attacker</th>
+                <th>Dropped Packets</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <script>
+        // Initialize a connection to the server
+        const socket = io();
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('firewall_update', (data) => {
+            console.log('Received firewall update:', data);
+            
+            const attackStatusTitle = document.getElementById('attackStatusTitle');
+            const tableBody = document.getElementById('FirewallDataTable').querySelector('tbody');
+            tableBody.innerHTML = '';
+            for (const [suspectedHost, firewallData] of Object.entries(data)) {
+                const row = document.createElement('tr');
+                
+                const attackerHostCell = document.createElement('td');
+                attackerHostCell.textContent = firewallData.suspected_host;
+                row.appendChild(attackerHostCell);
+
+                const droppedPktCountCell = document.createElement('td');
+                droppedPktCountCell.textContent = firewallData.dropped_pkt_count;
+                row.appendChild(droppedPktCountCell);
+
+                const timeStampCell = document.createElement('td');
+                timeStampCell.textContent = new Date(firewallData.time_stamp * 1000).toLocaleString(); // Format timestamp
+                row.appendChild(timeStampCell);
+
+                tableBody.appendChild(row);
+            }
+
+            // Update the attack status title based on the attack_status variable
+            if (Object.values(data).some(firewallData => firewallData.attack_status)) {
+                attackStatusTitle.textContent = 'System is Under Attack!';
+                attackStatusTitle.style.color = 'red';
+            } 
+            if (!Object.values(data).some(firewallData => firewallData.attack_status)) {
+                attackStatusTitle.textContent = 'No Threat Detected.';
+                attackStatusTitle.style.color = 'green';
+            }
+        });
+
+        // Listen for attack updates
+        socket.on('attack_update', (data) => {
+            console.log('Received attack update:', data);
+        });
+
+    </script>
+</body>
+</html>
