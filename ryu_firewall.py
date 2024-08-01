@@ -64,8 +64,12 @@ class SimpleSwitch13(app_manager.RyuApp):
         match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
                                           ofproto.OFPCML_NO_BUFFER)]
-        self.add_flow(datapath, 0, match, actions)
+        self.add_flow(datapath, 0, match, actions, idle_timeout=0)
         # flow_table(self)
+
+        if datapath.id not in self.datapaths:
+            self.datapaths[datapath.id] = datapath
+            # self.logger.info('Registering datapath: %16x', datapath.id)
 
         # Make Changes HERE!
 
@@ -228,8 +232,8 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         dpid = format(datapath.id, "d").zfill(16)
         self.mac_to_port.setdefault(dpid, {})
-
-        # self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
+        if int(dst[:1]) != 3:
+            self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
         # learn a mac address to avoid FLOOD next time.
         self.mac_to_port[dpid][src] = in_port
@@ -249,10 +253,10 @@ class SimpleSwitch13(app_manager.RyuApp):
             # verify if we have a valid buffer_id, if yes avoid to send both
             # flow_mod & packet_out
             if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                self.add_flow(datapath, 1, match, actions, msg.buffer_id)
+                self.add_flow(datapath, 1, match, actions, msg.buffer_id, 0)
                 return
             else:
-                self.add_flow(datapath, 1, match, actions)
+                self.add_flow(datapath, 1, match, actions, 0)
         data = None
         if msg.buffer_id == ofproto.OFP_NO_BUFFER:
             data = msg.data
@@ -269,7 +273,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         while True:
             for dp in self.datapaths.values():
                 self.get_stats(dp)
-            hub.sleep(1) # check the throughput every 1 second
+            hub.sleep(10) # check the throughput every 1 second
 
     '''
     get_stats()
@@ -278,7 +282,7 @@ class SimpleSwitch13(app_manager.RyuApp):
     def get_stats(self, datapath):
         self.logger.info('Requesting stats for: %016x', datapath.id)
 
-        ofproto = datapath.ofproto
+        # ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
         request = parser.OFPFlowStatsRequest(datapath)
@@ -311,31 +315,34 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         # sort flow rules, then check the stats of each rule
         for stat in msg.body:
-            # filter out by flow rules that have matched
-            if stat.packet_count > 0:
-                if len(self.dst_mac) > 0:
-                    # check each dst mac in list and update respective counts
-                    for i in range(len(self.dst_mac)):
-                        if 'eth_dst' in stat.match:
-                            if stat.match['eth_dst'] == self.dst_mac[i]:
-                                print('incremented count for: ', stat.match['eth_dst'])
-                                self.count_dst[i] += 1
-                
-                # check against firewall conditions
-                packet_condition = stat.packet_count >= self.link_max
-                byte_condition = (stat.byte_count / stat.packet_count) < self.byte_ratio_max
+            print(stat.match)
 
-                if packet_condition and byte_condition:
-                    # if ddos detected, send a flow rule to DROP packets
-                    self.add_flow(datapath=datapath, priority=11, match=stat.match, actions=[], idle_timeout=10)
-                    print(f'!!! DDOS detected !!!')
-                    # print(f'Dropping link to: {stat.match['eth_dst']}')
-                    print('Dropping link to: ', stat.match['eth_dst'])
-                
-                # send flow mod request to update the flow table
-                mod = parser.OFPFlowMod(datapath=datapath, priority=stat.priority, idle_timeout=stat.idle_timeout, match=stat.match, instructions=stat.instructions, flags=ofproto.OFPFF_RESET_COUNTS) # reset the counts for each flag
+            if stat.priority == 1:
+                # filter out by flow rules that have matched
+                if stat.packet_count > 0:
+                    if len(self.dst_mac) > 0:
+                        # check each dst mac in list and update respective counts
+                        for i in range(len(self.dst_mac)):
+                            if 'eth_dst' in stat.match:
+                                if stat.match['eth_dst'] == self.dst_mac[i]:
+                                    print('incremented count for: ', stat.match['eth_dst'])
+                                    self.count_dst[i] += 1
+                    
+                    # check against firewall conditions
+                    packet_condition = stat.packet_count >= self.link_max
+                    byte_condition = (stat.byte_count / stat.packet_count) < self.byte_ratio_max
 
-                datapath.send_msg(mod)
+                    if packet_condition and byte_condition:
+                        # if ddos detected, send a flow rule to DROP packets
+                        self.add_flow(datapath=datapath, priority=11, match=stat.match, actions=[], idle_timeout=10)
+                        print(f'!!! DDOS detected - packet or byte !!!')
+                        # print(f'Dropping link to: {stat.match['eth_dst']}')
+                        print('Dropping link to: ', stat.match['eth_dst'])
+                
+                    # send flow mod request to update the flow table
+                    mod = parser.OFPFlowMod(datapath=datapath, priority=stat.priority, idle_timeout=stat.idle_timeout, match=stat.match, instructions=stat.instructions, flags=ofproto.OFPFF_RESET_COUNTS) # reset the counts for each flag
+
+                    datapath.send_msg(mod)
         
         # check dst condition
         if len(self.dst_mac) > 0:
@@ -345,7 +352,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                     match = parser.OFPMatch(eth_dst=self.dst_mac[i])
                     # send DROP rule
                     self.add_flow(datapath=datapath, priority=12, match=match, actions=[], idle_timeout=10)
-                    print(f'!!! DDOS detected !!!')
+                    print(f'!!! DDOS detected - dst limit !!!')
                     print(f'Dropping packets to dst mac: {self.dst_mac[i]}')
             
             # reset all dst counts to 0
