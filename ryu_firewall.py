@@ -27,7 +27,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.dst_ip = {} # dict of destination IPv4 addresses to track and it's count
         self.count_src = [] # number of times each src has sent requests
         self.count_dst = [] # number of times each dst has received packets
-        self.link_max = 5 # set the max. number of packets a link can receive within a window
+        self.link_max = 50 # set the max. number of packets a link can receive within a window
         self.byte_ratio_max = 100 # set min. number of bytes per packet
         self.dst_max = 2 # set the max. number of times a dst can receive packets within a window
 
@@ -123,11 +123,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         switch_index = switch_index // 10   # 1st digit
 
         # Agg to Core route - if in from port 3&4, out from ports 1&2
-        for in_port in range(1+self.k//2, 1+self.k):
-            for out_port in range(1, 1+self.k//2):
-                match = parser.OFPMatch(in_port=(in_port))
-                actions = [parser.OFPActionOutput(out_port)]
-                self.add_flow(datapath, 1, match, actions)
         for j in range(0, self.k//2):
             ip_DEST = (f"0.0.0.{j+2}", '0.0.0.255')
             
@@ -158,11 +153,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         switch_index = switch_index // 10   # 1st digit
 
         # Edge to Agg route - if in from port 3&4, out from ports 1&2
-        for in_port in range(1+self.k//2, 1+self.k):
-            for out_port in range(1, 1+self.k//2):
-                match = parser.OFPMatch(in_port=(in_port))
-                actions = [parser.OFPActionOutput(out_port)]
-                self.add_flow(datapath, 1, match, actions)
 
         for j in range(0, self.k//2):
             ip_DEST = (f"0.0.0.{j+2}", '0.0.0.255')
@@ -183,10 +173,9 @@ class SimpleSwitch13(app_manager.RyuApp):
 
             match = parser.OFPMatch(eth_type = 0x0800, ipv4_dst = ip_DEST)
             actions = [parser.OFPActionOutput(port_DEST)]
-            # self.add_flow(datapath, 11, match, actions)
             self.add_flow(datapath, 10, match, actions)
             self.logger.info("Added flow to switch %s to port %d for address %s", dpid_str, port_DEST, ip_DEST)
-        
+            
 
 
     def get_datapath(self, switch_name):
