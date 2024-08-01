@@ -24,7 +24,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         # firewall variables
         self.monitor_thread = hub.spawn(self.monitor)
         self.src_mac = [] # list of source mac addresses to track
-        self.dst_ip = [] # list of destination IPv4 addresses to track
+        self.dst_ip = {} # dict of destination IPv4 addresses to track and it's count
         self.count_src = [] # number of times each src has sent requests
         self.count_dst = [] # number of times each dst has received packets
         self.link_max = 5 # set the max. number of packets a link can receive within a window
@@ -244,7 +244,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             out_port = ofproto.OFPP_FLOOD
 
         # increment 
-        self.add_dst(src, dst)
+        # self.add_dst(src, dst)
         actions = [parser.OFPActionOutput(out_port)]
 
         # install a flow to avoid packet_in next time
@@ -316,27 +316,38 @@ class SimpleSwitch13(app_manager.RyuApp):
         # sort flow rules, then check the stats of each rule
         for stat in sorted([flow for flow in msg.body if flow.priority ==1 and 'ipv4_dst' in flow.match], key=lambda flow: (flow.match.get('ipv4_dst'))):
             print(stat.match)
+            # filter out by flow rules that have matchedoffending handler [handle_flow_stats] servicing event [EventOFPFlowStatsReply] follows.
+            print('priority passed...')
+            print(stat)
+            print('destination ips: ')
+            print(self.dst_ip)
+            if stat.packet_count == 0:
+                print('dest ips: ', self.dst_ip)
+                ip_dst = stat.match['ipv4_dst']
+                if ip_dst not in self.dst_ip:
+                    # self.dst_ip.append(ip_dst)
+                    # self.count_dst.append(1)
+                    self.dst_ip[ip_dst] = 0
+                    print('added ip for: ', ip_dst)
 
-            if stat.priority == 1:
-                # filter out by flow rules that have matchedoffending handler [handle_flow_stats] servicing event [EventOFPFlowStatsReply] follows.
-                print('priority passed...')
-                print(stat)
-                if stat.packet_count > 0:
-                    print('packet count passed...')
-                    if len(self.dst_ip) > 0:
-                        print('dest ips: ', self.dst_ip)
-                        # check each dst ip in list and update respective counts
-                        for i in range(len(self.dst_ip)):
-                            if 'ipv4_dst' in stat.match:
-                                ip_dst = stat.match['ipv4_dst']
-                                if ip_dst not in self.dst_ip:
-                                    self.dst_ip.append(ip_dst)
-                                    self.count_dst.append(1)
-                                    print('added ip for: ', ip_dst)
-                                else:
-                                    ip_pos = self.dst_ip.index(ip_dst)
-                                    self.count_dst[ip_pos] += 1
-                                    print('incremented count for: ', ip_dst)
+            if stat.packet_count > 0:
+                print('packet count passed...')
+                if len(self.dst_ip) > 0:
+                    # check each dst ip in list and update respective counts
+                    for dest_ip in self.dst_ip:
+                        if 'ipv4_dst' in stat.match:
+                            ip_dst = stat.match['ipv4_dst']
+                            if ip_dst not in self.dst_ip:
+                                self.dst_ip[ip_dst] = 0
+
+                                # self.dst_ip.append(ip_dst)
+                                # self.count_dst.append(1)
+                                print('added ip for: ', ip_dst)
+                            else:
+                                # ip_pos = self.dst_ip.index(ip_dst)
+                                # self.count_dst[ip_pos] += 1
+                                self.dst_ip[ip_dst] += 1
+                                print('incremented count for: ', ip_dst)
 
                     
                     # check against firewall conditions
@@ -356,30 +367,33 @@ class SimpleSwitch13(app_manager.RyuApp):
         
         # check dst condition
         if len(self.dst_ip) > 0:
-            for i in range(len(self.count_dst)):
-                dst_condition = self.count_dst[i] >= self.dst_max
+            for dest_ip, dest_count in self.dst_ip.items():
+                print('ip: ', dest_ip)
+                print('count: ', dest_count)
+                dst_condition = dest_count >= self.dst_max
                 if dst_condition:
-                    match = parser.OFPMatch(ipv4_dst=self.dst_ip[i])
+                    match = parser.OFPMatch(ipv4_dst=dest_ip)
                     # send DROP rule
-                    self.add_flow(datapath=datapath, priority=12, match=match, actions=[], idle_timeout=10)
+                    self.add_flow(datapath=datapath, priority=15, match=match, actions=[], idle_timeout=10)
                     print(f'!!! DDOS detected - dst limit !!!')
-                    print(f'Dropping packets to dst mac: {self.dst_ip[i]}')
+                    print(f'Dropping packets to dst mac: {dest_ip}')
             
             # reset all dst counts to 0
-            self.count_dst = [i * 0 for i in self.count_dst]
+            for key in self.dst_ip:
+                self.dst_ip[key] = 0
     
     '''
     add_dst
         add an incoming dst mac address to the list of dst mac addresses
-    '''
-    def add_dst(self, src, dst):
-        if len(self.dst_ip) == 0:
-            self.dst_ip.append(dst) # add dest to list of destinations
-            self.count_dst.append(0) # initialise
-        else:
-            for i in range(len(self.dst_ip)):
-                if dst == self.dst_ip[i]:
-                    break # if dst already exists
-                if i == len(self.dst_ip) - 1:
-                    self.dst_ip.append(dst) # add new dst to end of list
-                    self.count_dst.append(0)
+    # '''
+    # def add_dst(self, src, dst):
+    #     if len(self.dst_ip) == 0:
+    #         self.dst_ip.append(dst) # add dest to list of destinations
+    #         self.count_dst.append(0) # initialise
+    #     else:
+    #         for i in range(len(self.dst_ip)):
+    #             if dst == self.dst_ip[i]:
+    #                 break # if dst already exists
+    #             if i == len(self.dst_ip) - 1:
+    #                 self.dst_ip.append(dst) # add new dst to end of list
+    #                 self.count_dst.append(0)
