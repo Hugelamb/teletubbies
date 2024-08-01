@@ -281,7 +281,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        request = parser.OFPFLowStatsRequest(datapath)
+        request = parser.OFPFlowStatsRequest(datapath)
         datapath.send_msg(request)
 
         # request = parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY) # gets port info for all ports
@@ -300,7 +300,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         3. dst condition -> number of packets sent to a host (dst) exceeds the dst limit
 
     '''
-    @set_ev_cls(ofp_event.EVENTOFPFlowStatsReply, MAIN_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def handle_flow_stats(self, ev):
         msg = ev.msg
         datapath = msg.datapath
@@ -309,24 +309,27 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         # sort flow rules, then check the stats of each rule
         for stat in msg.body:
+            print(f"{stat}")
             # filter out by flow rules that have matched
             if stat.packet_count > 0:
                 if len(self.dst_mac) > 0:
                     # check each dst mac in list and update respective counts
+                    print(f"{self.dst_mac}")
                     for i in range(len(self.dst_mac)):
+                        print(f"{stat.match}")
+                        print('eth destination is ', stat.match['eth_dst'])
                         if stat.match['eth_dst'] == self.dst_mac[i]: self.count_dst[i] += 1
                 
                 # check against firewall conditions
                 packet_condition = stat.packet_count >= self.link_max
-                byte_condition = (stat.byte_count / stat.packet_count) < byte_ratio_max
+                byte_condition = (stat.byte_count / stat.packet_count) < self.byte_ratio_max
 
                 if packet_condition and byte_condition:
                     # if ddos detected, send a flow rule to DROP packets
                     self.add_flow(datapath=datapath, priority=11, match=stat.match, actions=[], idle_timeout=10)
-                    pkt = packet.Packet(msg.data)
-                    eth = pkt.get_protocols(ethernet.ethernet)[0]
                     print(f'!!! DDOS detected !!!')
-                    print(f'Dropping link from: {eth.src}, to: {eth.dst}')
+                    # print(f'Dropping link to: {stat.match['eth_dst']}')
+                    print('Dropping link to: ', stat.match['eth_dst'])
                 
                 # send flow mod request to update the flow table
                 mod = parser.OFPFlowMod(datapath=datapath, priority=stat.priority, idle_timeout=stat.idle_timeout, match=stat.match, instructions=stat.instructions, flags=ofproto.OFPFF_RESET_COUNTS) # reset the counts for each flag
