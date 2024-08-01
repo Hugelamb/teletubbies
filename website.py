@@ -1,27 +1,42 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
+from flask_socketio import SocketIO
 
 app = Flask(__name__)
+socketio = SocketIO(app)
 
 data_storage = {}
 
 @app.route("/")
 def main():
-    return f"<p>{data_storage}<p>"
+    return render_template('index.html')
 
-@app.route('/update/<item_id>', methods=['PUT'])
+@app.route("/attack")
+def attack():
+    return render_template('attack.html')
+
+@app.route('/attack/<item_id>', methods=['PUT'])
 def update_item(item_id):
     if request.is_json:
         data = request.get_json()
-        
-        print(f"Received data: {data}")
-        
         data_storage[item_id] = data
         
-        print(f"Updated storage: {data_storage}")
+        socketio.emit('update', data_storage)
+
+        return '', 200
+    else:
+        return jsonify({'error': 'Invalid input, expected JSON data'}), 400
+
+@app.route('/firewall/<item_id>', methods=['PUT'])
+def update_firewall_item(item_id):
+    if request.is_json:
+        data = request.get_json()
+        data_storage[item_id] = data
         
-        return jsonify({'message': 'Item updated successfully', 'item': data}), 200
+        socketio.emit('update', data_storage)
+
+        return '', 200
     else:
         return jsonify({'error': 'Invalid input, expected JSON data'}), 400
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    socketio.run(app, debug=True, port=5000)
