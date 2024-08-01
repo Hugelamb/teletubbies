@@ -359,7 +359,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             for i in range(len(self.count_dst)):
                 dst_condition = self.count_dst[i] >= self.dst_max
                 if dst_condition:
-                    match = parser.OFPMatch(eth_dst=self.dst_ip[i])
+                    match = parser.OFPMatch(ipv4_dst=self.dst_ip[i])
                     # send DROP rule
                     self.add_flow(datapath=datapath, priority=12, match=match, actions=[], idle_timeout=10)
                     print(f'!!! DDOS detected - dst limit !!!')
