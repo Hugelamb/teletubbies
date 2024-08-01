@@ -316,9 +316,10 @@ class SimpleSwitch13(app_manager.RyuApp):
                     # check each dst mac in list and update respective counts
                     print(f"{self.dst_mac}")
                     for i in range(len(self.dst_mac)):
-                        print(f"{stat.match}")
-                        print('eth destination is ', stat.match['eth_dst'])
-                        if stat.match['eth_dst'] == self.dst_mac[i]: self.count_dst[i] += 1
+                        if 'eth_dst' in stat.match:
+                            print(f"{stat.match}")
+                            print('eth destination is ', stat.match['eth_dst'])
+                            if stat.match['eth_dst'] == self.dst_mac[i]: self.count_dst[i] += 1
                 
                 # check against firewall conditions
                 packet_condition = stat.packet_count >= self.link_max
