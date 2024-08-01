@@ -7,10 +7,8 @@ from mininet.log import setLogLevel, info
 # module imports
 import argparse
 import random 
-import threading
 import sys
 import csv
-import os
 import cmd
 from math import floor
 from subprocess import Popen
@@ -33,6 +31,7 @@ class AttackNet:
     def init_attack(self):
         """
         Initiate DDoS attack with botnet_sz made of between 20-40% of network hosts using
+
         hping3 in the background
         """
         info('*** Initiate attack\n')
