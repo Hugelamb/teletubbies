@@ -192,19 +192,22 @@ class SimpleSwitch13(app_manager.RyuApp):
     def get_datapath(self, switch_name):
         return self.datapaths.get(switch_name)
 
-    def add_flow(self, datapath, priority, match, actions, buffer_id=None, idle_timeout=0):
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None, idle_timeout=0, reset_count=False):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
                                              actions)]
+        flags = 0
+        if reset_count:
+            flags |= ofproto.OFPFF_RESET_COUNTS
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, match=match,
-                                    instructions=inst, idle_timeout=idle_timeout)
+                                    instructions=inst, idle_timeout=idle_timeout, flags=flags)
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    match=match, instructions=inst, idle_timeout=idle_timeout)
+                                    match=match, instructions=inst, idle_timeout=idle_timeout, flags=flags)
         datapath.send_msg(mod)
    
 
@@ -314,7 +317,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         print('Flow stats received...')
 
         # sort flow rules, then check the stats of each rule
-        for stat in sorted([flow for flow in msg.body if (flow.priority == 1 or flow.priority == 10)  and 'ipv4_dst' in flow.match], key=lambda flow: flow.match['ipv4_dst']):
+        for stat in sorted([flow for flow in msg.body if (flow.priority == 10)  and 'ipv4_dst' in flow.match], key=lambda flow: flow.match['ipv4_dst']):
             print(stat.match)
             # filter out by flow rules that have matchedoffending handler [handle_flow_stats] servicing event [EventOFPFlowStatsReply] follows.
             print('priority passed...')
@@ -340,7 +343,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                             self.dst_ip[ip_dst] = 0
                             print('added ip for: ', ip_dst)
                         else:
-                            for dest_ip, dest_count in self.dst_ip:
+                            for dest_ip, dest_count in self.dst_ip.items():
                                 if ip_dst == dest_ip:
                                     self.dst_ip[dest_ip] = dest_count + 1
                                     print('incremented count for: ', ip_dst)
@@ -355,6 +358,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                         self.add_flow(datapath=datapath, priority=11, match=stat.match, actions=[], idle_timeout=10)
                         print(f'!!! DDOS detected - packet or byte !!!')
                         print(f'Dropping link to: ', stat.match['ipv4_dst'])
+
                 
                     # send flow mod request to update the flow table
                     mod = parser.OFPFlowMod(datapath=datapath, priority=stat.priority, idle_timeout=stat.idle_timeout, match=stat.match, instructions=stat.instructions, flags=ofproto.OFPFF_RESET_COUNTS) # reset the counts for each flag
@@ -364,8 +368,8 @@ class SimpleSwitch13(app_manager.RyuApp):
         # check dst condition
         if len(self.dst_ip) > 0:
             for dest_ip, dest_count in self.dst_ip.items():
-                print('ip: ', dest_ip)
-                print('count: ', dest_count)
+                # print('ip: ', dest_ip)
+                # print('count: ', dest_count)
                 dst_condition = dest_count >= self.dst_max
                 if dst_condition:
                     match = parser.OFPMatch(ipv4_dst=dest_ip)
@@ -373,24 +377,11 @@ class SimpleSwitch13(app_manager.RyuApp):
                     self.add_flow(datapath=datapath, priority=15, match=match, actions=[], idle_timeout=10)
                     print(f'!!! DDOS detected - dst limit !!!')
                     print(f'Dropping packets to dst mac: {dest_ip}')
+                    print('ip: ', dest_ip)
+                    print('count: ', dest_count)
 
             
         # reset all dst counts to 0
         for key in self.dst_ip:
             self.dst_ip[key] = 0
     
-    '''
-    add_dst
-        add an incoming dst mac address to the list of dst mac addresses
-    # '''
-    # def add_dst(self, src, dst):
-    #     if len(self.dst_ip) == 0:
-    #         self.dst_ip.append(dst) # add dest to list of destinations
-    #         self.count_dst.append(0) # initialise
-    #     else:
-    #         for i in range(len(self.dst_ip)):
-    #             if dst == self.dst_ip[i]:
-    #                 break # if dst already exists
-    #             if i == len(self.dst_ip) - 1:
-    #                 self.dst_ip.append(dst) # add new dst to end of list
-    #                 self.count_dst.append(0)
