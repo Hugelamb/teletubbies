@@ -10,7 +10,7 @@ import argparse
 import sys
 from time import sleep,time
 #   import website
-
+# import matplotlib.pyplot as plt
 def run(k):
     
     
@@ -27,14 +27,9 @@ def run(k):
     
     # website.socketio.run(app, debug=True, port=5000)
     
-    subprocess.Popen(
-    ['ryu-manager', 'ryu_firewall.py', '--log-dir', 'logs', '--log-file', 'ryu.log'],
-    stdout=subprocess.DEVNULL,
-    stderr=subprocess.DEVNULL,
-    stdin=subprocess.DEVNULL,
-    start_new_session=True,
-    shell=True
-    ).wait()
+    # subprocess.call(
+    # ['ryu-manager', 'ryu_firewall.py']
+    # )
 
     topo = SimpleTopo(k)
 
@@ -53,7 +48,7 @@ def run(k):
         sleep(atk.wait_len)
         atk.end_monitor()
         atk.data_collection()
-        atk.data_plots()
+        # atk.data_plots()
         CLI(net)
         net.stop()
         atk.clean_net()

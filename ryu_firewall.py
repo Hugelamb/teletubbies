@@ -12,6 +12,7 @@ from ryu.lib import dpid as dpid_lib
 from ryu.lib import hub
 import visualize
 import ipaddress
+import time
 
 class SimpleSwitch13(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -348,9 +349,12 @@ class SimpleSwitch13(app_manager.RyuApp):
                         self.add_flow(datapath=datapath, priority=11, match=stat.match, actions=[], idle_timeout=10)
                         print(f'!!! DDOS detected - packet or byte !!!')
                         print(f'Dropping link to: ', stat.match['ipv4_dst'])
-                        visualize.display_attack_stats("H01", stat.match['ipv4_dst'], stat.packet_count, 1)
+                        visualize.display_firewall_stats(True, stat.match['ipv4_dst'], stat.packet_count, time.time())
 
-                
+                    else:
+                        visualize.display_firewall_stats(False, 'None', 0, time.time())
+
+                        
                     # send flow mod request to update the flow table
                     mod = parser.OFPFlowMod(datapath=datapath, priority=stat.priority, idle_timeout=stat.idle_timeout, match=stat.match, instructions=stat.instructions, flags=ofproto.OFPFF_RESET_COUNTS) # reset the counts for each flag
 
