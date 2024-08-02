@@ -10,9 +10,10 @@ import argparse
 import sys
 from time import sleep,time
 #   import website
+from mininet.log import setLogLevel, info
 
 def run(k):
-    
+    setLogLevel('info')     
     
     # subprocess.Popen(['ryu-manager', 'ryu_firewall.py', '--log-dir', 'logs', '--log-file', 'ryu.log'])
     # subprocess.Popen(['ryu-manager', 'visualize.py', '--log-dir', 'logs', '--log-file', 'ryu.log'])
@@ -34,7 +35,7 @@ def run(k):
     stdin=subprocess.DEVNULL,
     start_new_session=True,
     shell=True
-    ).wait()
+    )
 
     topo = SimpleTopo(k)
 
@@ -43,8 +44,10 @@ def run(k):
     net.start()
     try:
         atk = AttackNet(net)
+        atk.init_roles()
         atk.start_monitor() 
         sleep(atk.wait_len)
+        atk.start_traffic()
         atk.init_attack()
         atk.atk_start = time()
         sleep(atk.attack_len)
