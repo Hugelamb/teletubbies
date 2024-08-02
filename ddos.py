@@ -10,7 +10,7 @@ import random
 import sys
 import csv
 import cmd
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from math import floor
 from subprocess import Popen
 from time import sleep,time
