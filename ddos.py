@@ -17,7 +17,7 @@ from subprocess import Popen
 from time import sleep,time
 # user import
 from topo_simple import SimpleTopo
-
+import inspect
 
 class AttackNet:
     def __init__(self, net):
@@ -25,7 +25,7 @@ class AttackNet:
         self.tmp = 'tmp.csv'
         self.data = {}
         self.net = net
-        self.wait_len = 5
+        self.wait_len = 3
         self.itfs = []
         self.atk_start = 0
         self.atk_end = 0
@@ -34,9 +34,9 @@ class AttackNet:
         self.target = ''
     def clean_net(self):
         cmd = "sudo mn -c"
-        Popen(cmd,shell=True).wait()
+        Popen(cmd,shell=True).wait() 
 
-    def init_attack(self):
+    def init_sim(self):
         """
         Initiate DDoS attack with botnet_sz made of between 20-40% of network hosts using
 
@@ -51,17 +51,14 @@ class AttackNet:
         self.actors = host_ids
         self.target = self.actors[0]
         # print(self.actors)
+    
     def start_traffic(self):
         info('*** Start normal network traffic\n')
         self.normals = [id for id in self.net.hosts if not id in self.actors]
         # run traffic for sim duration     
         for host in self.normals:
-            host.cmd(f"timeout {self.wait_len*2+self.attack_len}s hping3 -S -d 200 -i 1 {self.target.IP()} &")      
+            host.cmd(f"timeout {self.wait_len*2+self.attack_len}s hping3 -S -d 200 -i 1 {self.target.IP()} &")
         
-
-    # def end_traffic(self):
-        
-
     def start_attack(self):
         info('*** Begin Attack\n')
         attackers = self.actors[1:]
@@ -74,11 +71,11 @@ class AttackNet:
         info('*** End Attack\n')
         cmd = "killall hping3"
         Popen(cmd, shell=True).wait()
-    
+     
     def start_monitor(self):
         info('*** run bwm-ng in background for data collection\n')
         cmd = f"bwm-ng -o csv -T rate -C ',' > {self.tmp} &"
-        Popen(cmd,shell=True).wait()
+        Popen(cmd,shell=True)
 
     def end_monitor(self):
         """Kill all running instances of bwm-ng """
@@ -88,7 +85,6 @@ class AttackNet:
 
     def data_collection(self):
         info('*** Scrape data from generated csv file\n')
-        t0 = float(0)  # for removing offset for time (ie so start time is 0)
         with open(self.tmp) as data_csv:
             reader = csv.reader(data_csv, delimiter=',', quoting=csv.QUOTE_NONE)
             for row in reader:
@@ -118,12 +114,13 @@ class AttackNet:
                     self.data[key]['Packets in/s'] = []
             
     def data_plots(self):
-        info('*** Plots\n')
+        info('*** Plots\n') 
         intf_of_intrst = [[[x.intf1.name, x.intf2.name] for x in self.net.links if str(y) in str(x.intf1)] for y in self.actors]
         intf_of_intrst = [x[0] for x in intf_of_intrst]
         attack_period = (self.atk_start,self.atk_end)
         counter = 0
         intf_normal = [[[x.intf1.name, x.intf2.name] for x in self.net.links if str(y) in str(x.intf1)] for y in self.normals]
+        print(intf_normal)
         intf_of_intrst.append(intf_normal[random.randint(0,len(intf_normal)-1)][0]) 
         for k in sorted(intf_of_intrst):
             xdataraw = self.data[k[1]]['time']
